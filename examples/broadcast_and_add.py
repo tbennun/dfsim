@@ -14,7 +14,7 @@ class MyPE(ProcessingElement):
         self.val = np.zeros(1, np.int32)
 
 
-# Define a 4x4 spatial processor with one communication plane
+# Define a 4x4 spatial processor with one communication channel
 sim = Processor(4, 4, default_memory=MyPE())
 
 #################################################
@@ -22,7 +22,7 @@ sim = Processor(4, 4, default_memory=MyPE())
 
 
 # Instigator
-@sim.register_handler(proc_i=0, proc_j=0, plane=0)
+@sim.register_handler(proc_i=0, proc_j=0, channel=0)
 def instigate(self: MyPE, _):
     if self.val == 0:  # Only send once
         self.val[:] = 42
@@ -40,7 +40,7 @@ for i in range(1, 3):
 
 
 # Store handler
-@sim.register_handler(proc_i=3, proc_j=0, plane=0)
+@sim.register_handler(proc_i=3, proc_j=0, channel=0)
 def store(self: MyPE, message: Optional[int]):
     if message is not None:
         self.val[:] = message + 1

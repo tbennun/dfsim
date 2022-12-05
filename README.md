@@ -6,7 +6,8 @@ The processors it simulates contain processing elements that contain their own m
 It is an event-driven simulator written in Python and allows you to register message handlers that will run perpetually on the processor.
 If no message was received, the handler will still be called but with a `None` argument for the message.
 
-For communication, you can specify routes via the `route` method on multiple concurrent communication planes in order to reduce congestion.
+For communication, you can specify routes via the `route` method on multiple concurrent communication channels in order
+to reduce congestion (similarly to Virtual Channels in NoCs or Communicators in MPI).
 
 ## Example use
 
@@ -23,14 +24,14 @@ class MyPE(ProcessingElement):
     def __init__(self):
         self.val = np.zeros(1, np.int32)
 
-# Define a 4x4 spatial processor with one communication plane
+# Define a 4x4 spatial processor with one communication channel
 sim = Processor(4, 4, 1, default_memory=MyPE())
 
 #################################################
 # Define message handlers
 
 # Instigator
-@sim.register_handler(proc_i=0, proc_j=0, plane=0)
+@sim.register_handler(proc_i=0, proc_j=0, channel=0)
 def instigate(self: MyPE, _):
     if self.val == 0:  # Only send once
         self.val[:] = 42
@@ -45,7 +46,7 @@ for i in range(1, 3):
             return message  # Forward
 
 # Store handler
-@sim.register_handler(proc_i=3, proc_j=0, plane=0)
+@sim.register_handler(proc_i=3, proc_j=0, channel=0)
 def store(self: MyPE, message: Optional[int]):
     if message is not None:
         self.val[:] = message

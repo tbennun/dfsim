@@ -15,7 +15,7 @@ class Multiplier(ProcessingElement):
         self.multiplied = False
 
 
-# Define a 100x1 spatial processor with one communication plane
+# Define a 100x1 spatial processor with one communication channel
 SIZE = 100
 sim = Processor(SIZE, 1, default_memory=Multiplier())
 

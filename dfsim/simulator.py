@@ -1,6 +1,6 @@
 """
 2D grid spatial architecture simulator with neighbor communication and multiple
-communication planes.
+communication channels.
 """
 import copy
 from enum import Enum, auto
@@ -56,14 +56,16 @@ class PE:
 
     def __init__(self, i: int, j: int, parent: 'Processor'):
         self.memory = None
-        self.inbound_routes = [Direction.NOTHING for _ in range(parent.planes)]
+        self.inbound_routes = [
+            Direction.NOTHING for _ in range(parent.channels)
+        ]
         self.outbound_routes = [
-            Direction.NOTHING for _ in range(parent.planes)
+            Direction.NOTHING for _ in range(parent.channels)
         ]
         self.skip_routes = [(Direction.NOTHING, Direction.NOTHING)
-                            for _ in range(parent.planes)]
-        self.handlers = [[] for _ in range(parent.planes)]
-        self.queues = [[] for _ in range(parent.planes)]
+                            for _ in range(parent.channels)]
+        self.handlers = [[] for _ in range(parent.channels)]
+        self.queues = [[] for _ in range(parent.channels)]
         self.i = i
         self.j = j
         self.parent = parent
@@ -74,17 +76,17 @@ class PE:
         """
         self.memory = memory
 
-    def register_handler(self, plane: int, handler: HandlerType):
+    def register_handler(self, channel: int, handler: HandlerType):
         """
-        Registers a message handler to this processing element on the given plane.
+        Registers a message handler to this processing element on the given channel.
         """
-        self.handlers[plane].append(handler)
+        self.handlers[channel].append(handler)
 
-    def run_planes(self):
+    def run_channels(self):
         """
-        Simulates all planes w.r.t. communication and execution.
+        Simulates all channels w.r.t. communication and execution.
         """
-        for p in range(self.parent.planes):
+        for p in range(self.parent.channels):
             tosend = None
             element = None
             if self.queues[p]:
@@ -96,7 +98,7 @@ class PE:
 
             # Take care of handlers
             for handler in self.handlers[p]:
-                # Only one send per plane, so result may be overridden
+                # Only one send per channel, so result may be overridden
                 tosend = handler(self.memory, element)
 
             # Take care of outbound routes
@@ -104,44 +106,44 @@ class PE:
                     and self.outbound_routes[p] != Direction.NOTHING):
                 self.send(tosend, self.outbound_routes[p], p)
 
-    def send(self, element: Any, direction: Direction, plane: int):
+    def send(self, element: Any, direction: Direction, channel: int):
         """
         Internal function that sends a message according to the route directionality.
         """
         if direction == Direction.NORTH:
-            self.parent[self.i - 1, self.j].queues[plane].append(element)
+            self.parent[self.i - 1, self.j].queues[channel].append(element)
         elif direction == Direction.SOUTH:
-            self.parent[self.i + 1, self.j].queues[plane].append(element)
+            self.parent[self.i + 1, self.j].queues[channel].append(element)
         elif direction == Direction.EAST:
-            self.parent[self.i, self.j + 1].queues[plane].append(element)
+            self.parent[self.i, self.j + 1].queues[channel].append(element)
         elif direction == Direction.WEST:
-            self.parent[self.i, self.j - 1].queues[plane].append(element)
+            self.parent[self.i, self.j - 1].queues[channel].append(element)
         elif direction == Direction.PROCESSOR:
-            self.queues[plane].append(element)
+            self.queues[channel].append(element)
 
 
 class Processor:
     """
     A simulated dataflow architecture processor.
     It is a 2D-grid spatial architecture with neighbor communication and
-    multiple concurrent communication routes (planes).
+    multiple concurrent communication routes (channels).
     """
     rows: int
     cols: int
-    planes: int
+    channels: int
     pes: List[PE]
 
     def __init__(self,
                  rows: int,
                  cols: int,
-                 planes: int = 1,
+                 channels: int = 1,
                  default_memory: Optional[ProcessingElement] = None):
         """
         Initializes a simulated processor.
 
         :param rows: The number of rows in the processing element grid.
         :param cols: The number of columns in the processing element grid.
-        :param planes: The number of concurrent communication routes that can
+        :param channels: The number of concurrent communication routes that can
                        be set.
         :param default_memory: The default processing element class (if not
                                None, the given object will be replicated
@@ -149,7 +151,7 @@ class Processor:
         """
         self.rows = rows
         self.cols = cols
-        self.planes = planes
+        self.channels = channels
         self.pes = [
             PE(ind // cols, ind % cols, self) for ind in range(rows * cols)
         ]
@@ -166,7 +168,7 @@ class Processor:
             raise IndexError
         return self.pes[i * self.cols + j]
 
-    def register_handler(self, proc_i: int, proc_j: int, plane: int = 0):
+    def register_handler(self, proc_i: int, proc_j: int, channel: int = 0):
         """
         A decorator that can be used to register perpetually-executed handlers
         for each processor.
@@ -175,7 +177,7 @@ class Processor:
         message. If no message is received in this time-step, the message
         parameter will be set to ``None``. The handler can also send a message
         in this time-step by returning a value. Note that only one message
-        can be sent per plane, so the last handler will override previous
+        can be sent per channel, so the last handler will override previous
         return values.
 
         Example use::
@@ -187,38 +189,38 @@ class Processor:
 
         :param proc_i: Processing element row.
         :param proc_j: Processing element column.
-        :param plane: Communication plane.
+        :param channel: Communication channel.
         """
         def decorator(func: HandlerType):
-            self[proc_i, proc_j].register_handler(plane, func)
+            self[proc_i, proc_j].register_handler(channel, func)
             return func
 
         return decorator
 
-    def route(self, proc_i: int, proc_j: int, plane: int, rcv: Direction,
+    def route(self, proc_i: int, proc_j: int, channel: int, rcv: Direction,
               snd: Direction):
         """
         Creates a new route in the spatial processor.
 
         :note: This function will override an existing route if called with
-               the same processing element index and plane.
+               the same processing element index and channel.
         :param proc_i: Processing element row.
         :param proc_j: Processing element column.
-        :param plane: Communication plane.
+        :param channel: Communication channel.
         :param rcv: Receiving direction.
         :param snd: Sending direction.
         """
         if snd == Direction.PROCESSOR:
-            self[proc_i, proc_j].inbound_routes[plane] = rcv
+            self[proc_i, proc_j].inbound_routes[channel] = rcv
         elif rcv == Direction.PROCESSOR:
-            self[proc_i, proc_j].outbound_routes[plane] = snd
+            self[proc_i, proc_j].outbound_routes[channel] = snd
         else:
-            self[proc_i, proc_j].skip_routes[plane] = (rcv, snd)
+            self[proc_i, proc_j].skip_routes[channel] = (rcv, snd)
 
     def simulate(self, time_steps: int):
         """
         Simulate the dataflow architecture for the given number of time steps.
-        In each step, messages are received across all planes, handlers are
+        In each step, messages are received across all channels, handlers are
         executed, and new messages are sent.
 
         :param time_steps: The number of time steps to simulate.
@@ -229,4 +231,4 @@ class Processor:
             # This can probably run in parallel
             for i in range(self.rows):
                 for j in range(self.cols):
-                    self[i, j].run_planes()
+                    self[i, j].run_channels()
